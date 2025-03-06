@@ -1,0 +1,8 @@
+build/
+
+lib/
+!lib/README.txt
+
+include/cglm
+
+compile_commands.json
