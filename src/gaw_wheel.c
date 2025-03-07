@@ -23,12 +23,13 @@
 
 #define DELTA_T 32 // milliseconds per simulation tick (60 FPS)
 
+#define IMPULSE 0.00025f // d𝛚 = (I / T) dt where IMPULSE = (I / T) [I = Moment of Inertia, T = Avg Torque]
+
 typedef struct {
 	float angle;
 	float angle_prev;
 	float angular_speed;
-	float friction;      // 0 < f_k <= 1
-	float radius;        // r > 0
+	float radius;
 	SDL_Texture *texture;
 } Wheel;
 
@@ -50,16 +51,15 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	SDL_Surface *surface = NULL;
 	char *bmp_path = NULL;
 
-	AppState *app_state_p = (AppState *)SDL_calloc(1, sizeof(AppState));
-	if (!app_state_p) {
+	AppState *ctx = (AppState *)SDL_calloc(1, sizeof(AppState));
+	if (!ctx) {
 		return SDL_APP_FAILURE;
 	}
 
-	*appstate = app_state_p;
+	*appstate = ctx;
 
-	app_state_p->wheel.angular_speed = 0.72f; // deg / ms
-	app_state_p->wheel.friction = 0.0025f;
-	app_state_p->wheel.radius = WINDOW_WIDTH / 2.0f; 
+	ctx->wheel.angular_speed = 0.72f; // deg / ms
+	ctx->wheel.radius = WINDOW_WIDTH / 2.0f; 
 
     SDL_SetAppMetadata("Raycast Engine", "0.0.0a", "com.raycast");
 
@@ -68,12 +68,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    if (!SDL_CreateWindowAndRenderer("GEOMETRY EXAMPLE", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &app_state_p->window, &app_state_p->renderer)) {
+    if (!SDL_CreateWindowAndRenderer("GEOMETRY EXAMPLE", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &ctx->window, &ctx->renderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
-	SDL_SetRenderVSync(app_state_p->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
+	SDL_SetRenderVSync(ctx->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
 
 	SDL_asprintf(&bmp_path, "%swheel.bmp", SDL_GetBasePath());
 	surface = SDL_LoadBMP(bmp_path);
@@ -83,15 +83,15 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	}
 	SDL_free(bmp_path);
 
-	app_state_p->wheel.texture = SDL_CreateTextureFromSurface(app_state_p->renderer, surface);
-	if (!app_state_p->wheel.texture) {
+	ctx->wheel.texture = SDL_CreateTextureFromSurface(ctx->renderer, surface);
+	if (!ctx->wheel.texture) {
 		SDL_Log("Failure to create static texture: %s", SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
 	SDL_DestroySurface(surface);
 
-	app_state_p->prev_tick = SDL_GetTicks();
+	ctx->prev_tick = SDL_GetTicks();
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -108,29 +108,29 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-	AppState *app_state_p = (AppState *)appstate;
+	AppState *ctx = (AppState *)appstate;
 
 	SDL_FPoint center;
 	SDL_FRect wheel_AABB;
 
 	const Uint64 now = SDL_GetTicks();
-	const Uint64 dt = now - app_state_p->prev_tick;
+	const Uint64 dt = now - ctx->prev_tick;
 
 	// Physics
-	app_state_p->physics_time += dt;
+	ctx->physics_time += dt;
 
-	while (app_state_p->physics_time >= DELTA_T) {
+	while (ctx->physics_time >= DELTA_T) {
 
-		app_state_p->wheel.angle_prev = app_state_p->wheel.angle;
-		app_state_p->wheel.angle += app_state_p->wheel.angular_speed * DELTA_T;
-		app_state_p->wheel.angular_speed -= app_state_p->wheel.friction;
-		app_state_p->wheel.angular_speed = (app_state_p->wheel.angular_speed < 0) ? 0 : app_state_p->wheel.angular_speed;
+		ctx->wheel.angle_prev = ctx->wheel.angle;
+		ctx->wheel.angle += ctx->wheel.angular_speed * DELTA_T;
+		ctx->wheel.angular_speed -= IMPULSE * DELTA_T;
+		ctx->wheel.angular_speed = (ctx->wheel.angular_speed < 0) ? 0 : ctx->wheel.angular_speed;
 
-		app_state_p->physics_time -= DELTA_T;
+		ctx->physics_time -= DELTA_T;
 	}
 
 	// Game Logic
-	float diameter = 2.0f * app_state_p->wheel.radius;
+	float diameter = 2.0f * ctx->wheel.radius;
 
 	wheel_AABB.x = (WINDOW_WIDTH - diameter) / 2.0f;
 	wheel_AABB.y = (WINDOW_HEIGHT - diameter) / 2.0f;
@@ -141,15 +141,15 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	center.y = diameter / 2.0f;
 
 	// Draw frame
-	SDL_SetRenderDrawColor(app_state_p->renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(app_state_p->renderer);
-	SDL_RenderTextureRotated(app_state_p->renderer, app_state_p->wheel.texture, NULL, &wheel_AABB, glm_lerp(app_state_p->wheel.angle_prev, app_state_p->wheel.angle, ((float) app_state_p->physics_time) / DELTA_T), &center, SDL_FLIP_NONE);
-	SDL_RenderPresent(app_state_p->renderer);
+	SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(ctx->renderer);
+	SDL_RenderTextureRotated(ctx->renderer, ctx->wheel.texture, NULL, &wheel_AABB, glm_lerp(ctx->wheel.angle_prev, ctx->wheel.angle, ((float) ctx->physics_time) / DELTA_T), &center, SDL_FLIP_NONE);
+	SDL_RenderPresent(ctx->renderer);
 
 	// Update frame timer
-	app_state_p->total_time += now - app_state_p->prev_tick;
-	app_state_p->frames += 1;
-	app_state_p->prev_tick = now;
+	ctx->total_time += now - ctx->prev_tick;
+	ctx->frames += 1;
+	ctx->prev_tick = now;
 
     return SDL_APP_CONTINUE;
 }
@@ -158,10 +158,10 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
 	if (NULL != appstate) {
-		AppState *app_state_p = (AppState *)appstate;
-		//SDL_Log("Avg frames per second: %f\n", 1000.0f * (float)app_state_p->frames / (float)app_state_p->total_time);
-		SDL_DestroyRenderer(app_state_p->renderer);
-		SDL_DestroyWindow(app_state_p->window);
-		SDL_free(app_state_p);
+		AppState *ctx = (AppState *)appstate;
+		//SDL_Log("Avg frames per second: %f\n", 1000.0f * (float)ctx->frames / (float)ctx->total_time);
+		SDL_DestroyRenderer(ctx->renderer);
+		SDL_DestroyWindow(ctx->window);
+		SDL_free(ctx);
 	}
 }
