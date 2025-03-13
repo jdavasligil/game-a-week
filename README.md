@@ -11,6 +11,10 @@ Make sure all libraries are linked or copied to lib.
 ### Dependencies
 * [cglm (v>=0.9.6)](https://github.com/recp/cglm)
 * [sdl3 (v>=3.2.4)](https://github.com/libsdl-org/SDL)
+* [sdl3_ttf (v>=3.2.0)](https://github.com/libsdl-org/SDL)
+
+#### Note
+We are currently using the latest nightly updates for SDL. To this end, it is recommended to clone each repository and build the latest shared libraries locally and sym-link them into lib.
 
 ## Debugging
 

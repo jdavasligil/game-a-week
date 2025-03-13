@@ -3,6 +3,10 @@ build/
 lib/
 !lib/README.txt
 
+.cache/
+
 include/cglm
+include/SDL3
+include/SDL3_ttf
 
 compile_commands.json

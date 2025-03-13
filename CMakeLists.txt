@@ -30,4 +30,4 @@ target_include_directories(wheel PUBLIC include)
 
 # Link to the actual SDL3 library.
 #target_link_libraries(wheel PRIVATE SDL3::SDL3)
-target_link_libraries(wheel PRIVATE libSDL3.so libcglm.a)
+target_link_libraries(wheel PRIVATE libSDL3.so libSDL3_ttf.so libcglm.a)
