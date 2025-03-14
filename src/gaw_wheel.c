@@ -2,13 +2,13 @@
  * Game A Week (Project GAW)
  * Wheel Of Fortune
  */
-
-#include <SDL3/SDL_error.h>
-#include <SDL3/SDL_iostream.h>
 #define SDL_MAIN_USE_CALLBACKS 1
+#define DEBUG // Uncomment this line to enable runtime debugging.
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
@@ -21,25 +21,34 @@
 
 #include <cglm/cglm.h>
 
-#define DEBUG // Uncomment this line to enable runtime debugging.
+#include <EGL/EGL_strings.h>
+
 
 #define PATH_MAX 4096
+#define WHEEL_MAX 12
+#define WORD_MAX 16
 
-#define TEXT_PT_SIZE 128.0f
+#define TEXT_PT_SIZE 32.0f
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
+#define WHEEL_DIAMETER 600
+#define WHEEL_RADIUS   300
+#define WHEEL_SPEED    0.72f // deg / ms
+
 #define DELTA_T 32 // milliseconds per simulation tick (16 ~ 60 FPS, 32 ~ 30 FPS)
 #define IMPULSE 0.00025f // d𝛚 = (I / T) dt where IMPULSE = (I / T) [I = Moment of Inertia, T = Avg Torque]
 
-#define STR_FastReset(s) ( s[0] = '\0' )
+#define EGL_ClearStr(s) ( s[0] = '\0' )
 
 typedef struct {
+	char words[WHEEL_MAX][WORD_MAX];
+
 	float angle;
 	float angle_prev;
 	float angular_speed;
-	float radius;
+
 	SDL_Texture *texture;
 } Wheel;
 
@@ -102,7 +111,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 	SDL_Surface *surface = SDL_LoadBMP(path);
 	if (!surface) {
-		SDL_Log("Failure to load bitmap: %s", SDL_GetError());
+		SDL_Log("Failure to load bitmap: %s\n", SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
@@ -114,13 +123,42 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 	SDL_DestroySurface(surface);
 
+	/* Initialize Wheel */
+	ctx->wheel.angular_speed = WHEEL_SPEED;
+
+	/* Load Words */
+	EGL_ClearStr(path);
+	err = SDL_snprintf(path, PATH_MAX, "%sgames.dat", SDL_GetBasePath());
+	if (err < 0) {
+		SDL_Log("Failure to write path to buffer.\n");
+		return SDL_APP_FAILURE;
+	}
+
+	Reader word_reader;
+	word_reader.data = (char *) SDL_LoadFile(path, &(word_reader.size));
+	word_reader.offset = 0;
+
+	if (!word_reader.data) {
+		SDL_Log("Failure to load file: %s\n", SDL_GetError());
+		return SDL_APP_FAILURE;
+	}
+
+	for (int i = 0; i < WHEEL_MAX; i++) {
+		err = EGL_ReadLine(&word_reader, ctx->wheel.words[i], WORD_MAX);
+		if (err < 0) {
+		SDL_Log("Failure to read line %d with error code: %d\n", i, err);
+		return SDL_APP_FAILURE;
+		}
+	}
+	SDL_free(word_reader.data);
+
 	/* Load Font */
 	if (!TTF_Init()) {
 		SDL_Log("Failure to initialize SDL_ttf: %s\n", SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
 
-	STR_FastReset(path);
+	EGL_ClearStr(path);
 	err = SDL_snprintf(path, PATH_MAX, "%shey_comic.ttf", SDL_GetBasePath());
 	if (err < 0) {
 		SDL_Log("Failure to write path to buffer.\n");
@@ -133,22 +171,41 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 		return SDL_APP_FAILURE;
 	}
 
-	SDL_Color color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
-	SDL_Surface *text = TTF_RenderText_Blended(ctx->font.ttf, "TEST", 0, color);
-	if (text) {
-		ctx->font.texture = SDL_CreateTextureFromSurface(ctx->renderer, text);
+	SDL_free(path);
+
+	/* Create texture for words on wheel */
+	SDL_Color word_color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
+	ctx->font.texture = SDL_CreateTexture(ctx->renderer, SDL_PIXELFORMAT_ARGB32, SDL_TEXTUREACCESS_TARGET, WHEEL_DIAMETER, WHEEL_DIAMETER);
+	SDL_SetRenderTarget(ctx->renderer, ctx->font.texture);
+
+	float render_angle = 15.0f;
+	SDL_FPoint center = { (float) WHEEL_RADIUS, (float) WHEEL_RADIUS };
+	SDL_Surface *word_surface = SDL_CreateSurface(WHEEL_DIAMETER, WHEEL_DIAMETER, SDL_PIXELFORMAT_ARGB32);
+
+	for (int i = 0; i < WHEEL_MAX; i++) {
+		SDL_Surface *text = TTF_RenderText_Blended(ctx->font.ttf, ctx->wheel.words[i], 0, word_color);
+		const SDL_Rect word_rect = {
+			.x = (int)(WHEEL_RADIUS * 1.15 + (WHEEL_RADIUS * 0.85 - (float)text->w) / 2.0f),
+			.y = WHEEL_RADIUS - (int) (TEXT_PT_SIZE * 2.0f / 3.0f),
+			.w = WHEEL_RADIUS,
+			.h = (int) (((float) WHEEL_RADIUS) * 0.10),
+		};
+		SDL_BlitSurface(text, NULL, word_surface, &word_rect);
 		SDL_DestroySurface(text);
+
+		SDL_Texture *word_texture = SDL_CreateTextureFromSurface(ctx->renderer, word_surface);
+		SDL_ClearSurface(word_surface, 0.0f, 0.0f, 0.0f, 0.0f);
+
+		SDL_RenderTextureRotated(ctx->renderer, word_texture, NULL, NULL, render_angle, &center, SDL_FLIP_NONE);
+		render_angle += 30.0f;
 	}
+	SDL_DestroySurface(word_surface);
+	SDL_SetRenderTarget(ctx->renderer, NULL);
+
 	if (!ctx->font.texture) {
 		SDL_Log("Failure to create text texture: %s\n", SDL_GetError());
 		return SDL_APP_FAILURE;
 	}
-
-	/* Initialize Wheel */
-	ctx->wheel.angular_speed = 0.72f; // deg / ms
-	ctx->wheel.radius = WINDOW_WIDTH / 2.0f; 
-
-	SDL_free(path);
 
 	ctx->prev_tick = SDL_GetTicks();
 
@@ -189,15 +246,13 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	}
 
 	// Game Logic
-	float diameter = 2.0f * ctx->wheel.radius;
+	wheel_AABB.x = (float) (WINDOW_WIDTH - WHEEL_DIAMETER) / 2.0f;
+	wheel_AABB.y = (float) (WINDOW_HEIGHT - WHEEL_DIAMETER) / 2.0f;
+	wheel_AABB.w = (float) WHEEL_DIAMETER;
+	wheel_AABB.h = (float) WHEEL_DIAMETER;
 
-	wheel_AABB.x = (WINDOW_WIDTH - diameter) / 2.0f;
-	wheel_AABB.y = (WINDOW_HEIGHT - diameter) / 2.0f;
-	wheel_AABB.w = diameter;
-	wheel_AABB.h = diameter;
-
-	center.x = diameter / 2.0f;
-	center.y = diameter / 2.0f;
+	center.x = (float) WHEEL_RADIUS;
+	center.y = (float) WHEEL_RADIUS;
 
 	// Draw frame
 	const float render_angle = glm_lerp(ctx->wheel.angle_prev, ctx->wheel.angle, ((float) ctx->physics_time) / DELTA_T);
