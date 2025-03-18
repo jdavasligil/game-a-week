@@ -18,6 +18,15 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "test",
+      "displayName": "Test",
+      "generator": "Ninja",
+      "binaryDir": "build/test",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Test"
+      }
     }
   ]
 }

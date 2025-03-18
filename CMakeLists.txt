@@ -26,8 +26,10 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 # Create your game executable target as usual
 add_executable(wheel src/gaw_wheel.c src/EGL/EGL_strings.c)
+add_executable(test src/EGL/EGL_testing.c src/EGL/EGL_xoshiro128plus.c src/EGL/EGL_xoshiro128plus_test.c)
 
 target_include_directories(wheel PUBLIC include)
+target_include_directories(test PUBLIC include)
 
 # Link to the actual SDL3 library.
 #target_link_libraries(wheel PRIVATE SDL3::SDL3)
