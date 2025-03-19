@@ -63,7 +63,7 @@
 #define EGL_DECLARE_ERROR(format, ...)\
 	T->errors[T->error_count].line = __LINE__;\
 	T->errors[T->error_count].error[0] = '\0';\
-	snprintf(T->errors[T->error_count].error, ERROR_MAX, format, __VA_ARGS__);\
+	snprintf(T->errors[T->error_count].error, ERROR_MAX, format, ##__VA_ARGS__);\
 	T->error_count += 1
 
 #define EGL_RUN_TEST(t)\
@@ -105,6 +105,7 @@ typedef struct {
 	char module[LABEL_MAX];
 	EGL_Test tests[TESTS_MAX];
 	int test_count;
+	int fail_count;
 	clock_t begin;
 	clock_t end;
 } EGL_TestModule;
@@ -133,6 +134,9 @@ static inline void EGL_LogModule(EGL_TestModule *M, EGL_TestLog *L) {
 
 	char *head = L->buffer + L->size;
 	for (int i = 0; i < M->test_count; i++) {
+		if (M->tests[i].error_count > 0) {
+			M->fail_count++;
+		}
 		total_errors += M->tests[i].error_count;
 		total_time += M->tests[i].time;
 	}
