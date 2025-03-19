@@ -229,4 +229,5 @@ static inline void EGL_LogModule(EGL_TestModule *M, EGL_TestLog *L) {
 void EGL_Xoshiro128PlusTest(EGL_TestModule *M);
 /*$ END TESTS */
 
+
 #endif /* EGL_TESTING_H */
