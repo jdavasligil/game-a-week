@@ -22,6 +22,10 @@
 #include <cglm/cglm.h>
 
 #include <EGL/EGL_strings.h>
+#include <EGL/EGL_random.h>
+
+#include <stdint.h>
+#include <time.h>
 
 
 #define PATH_MAX 4096
@@ -35,12 +39,17 @@
 
 #define WHEEL_DIAMETER 600
 #define WHEEL_RADIUS   300
-#define WHEEL_SPEED    0.72f // deg / ms
+#define WHEEL_SPEED_MIN   0.60f // deg / ms
+#define WHEEL_SPEED_RANGE 0.40f // deg / ms
 
 #define DELTA_T 32 // milliseconds per simulation tick (16 ~ 60 FPS, 32 ~ 30 FPS)
 #define IMPULSE 0.00025f // d𝛚 = (I / T) dt where IMPULSE = (I / T) [I = Moment of Inertia, T = Avg Torque]
 
 #define EGL_ClearStr(s) ( s[0] = '\0' )
+
+
+static uint32_t RNG[4];
+
 
 typedef struct {
 	char words[WHEEL_MAX][WORD_MAX];
@@ -95,7 +104,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
 	/* Initialize Window */
-    if (!SDL_CreateWindowAndRenderer("GEOMETRY EXAMPLE", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &ctx->window, &ctx->renderer)) {
+    if (!SDL_CreateWindowAndRenderer("WHEEL OF FORTUNE", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &ctx->window, &ctx->renderer)) {
         SDL_Log("Couldn't create window/renderer: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -124,14 +133,23 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	SDL_DestroySurface(surface);
 
 	/* Initialize Wheel */
-	ctx->wheel.angular_speed = WHEEL_SPEED;
+	EGL_Seed(RNG, (uint32_t)time(NULL));
+	ctx->wheel.angular_speed = WHEEL_SPEED_MIN + WHEEL_SPEED_RANGE * EGL_RandFloat(RNG);
 
 	/* Load Words */
 	EGL_ClearStr(path);
-	err = SDL_snprintf(path, PATH_MAX, "%sgames.dat", SDL_GetBasePath());
-	if (err < 0) {
-		SDL_Log("Failure to write path to buffer.\n");
-		return SDL_APP_FAILURE;
+	if (argc > 1) {
+		err = SDL_snprintf(path, PATH_MAX, "%s%s.dat", SDL_GetBasePath(), argv[1]);
+		if (err < 0) {
+			SDL_Log("Failure to write path to buffer.\n");
+			return SDL_APP_FAILURE;
+		}
+	} else {
+		err = SDL_snprintf(path, PATH_MAX, "%sgames.dat", SDL_GetBasePath());
+		if (err < 0) {
+			SDL_Log("Failure to write path to buffer.\n");
+			return SDL_APP_FAILURE;
+		}
 	}
 
 	Reader word_reader;
