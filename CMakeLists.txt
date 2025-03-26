@@ -47,3 +47,10 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/data/wheel.bmp
         $<TARGET_FILE_DIR:wheel>
     )
+
+add_custom_command(
+    TARGET florbles POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/sphere.bin
+        $<TARGET_FILE_DIR:florbles>
+    )
