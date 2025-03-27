@@ -2,13 +2,18 @@
  * Florbles: Alien Invasion!
  * A planetary tower defense game.
  */
-#define SDL_MAIN_USE_CALLBACKS 1
 
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_stdinc.h>
+#define DEBUG true
+
+#define SDL_MAIN_USE_CALLBACKS 1
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_gpu.h>
 
-#include <stdint.h>
+#include "world.h"
 
 
 #define PATH_MAX 4096
@@ -20,23 +25,10 @@
 
 
 typedef struct {
-	uint32_t indices_size;
-	uint32_t vertices_size;
-	uint32_t normals_size;
-	uint32_t uvs_size;
-	uint32_t index_count;
-	uint32_t vertex_count;
-	uint32_t normal_count;
-	uint32_t uv_count;
-	uint32_t *indices;
-	float *vertices; // jump 3: [(x,y,z)(x,y,z)...]
-	float *normals;  // jump 3: [(x,y,z)(x,y,z)...]
-	float *uvs;      // jump 2: [(u,v)(u,v)(u,v)...]
-} World;
-
-typedef struct {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
+	SDL_GPUDevice *gpu_dev;
+	SDL_GPUGraphicsPipeline *pipeline;
 
 	World world;
 
@@ -49,6 +41,7 @@ typedef struct {
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 	char *path = (char *) SDL_malloc(PATH_MAX * sizeof(char));
+	int err;
 
 	AppState *ctx = (AppState *)SDL_calloc(1, sizeof(AppState));
 	if (!ctx) {
@@ -65,58 +58,101 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
 	/* Initialize Window */
-    if (!SDL_CreateWindowAndRenderer("Florbles: Alien Invasion!", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &ctx->window, &ctx->renderer)) {
-        SDL_Log("Couldn't create window/renderer: %s\n", SDL_GetError());
+	ctx->window = SDL_CreateWindow("Florbles: Alien Invasion!", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    if (!ctx->window) {
+        SDL_Log("Couldn't create window: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
-	/* Initialize Sphere */
-	int err = SDL_snprintf(path, PATH_MAX, "%ssphere.bin", SDL_GetBasePath());
+	/* Initialize GPU Device */
+	ctx->gpu_dev = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, DEBUG, NULL);
+    if (!ctx->gpu_dev) {
+        SDL_Log("Couldn't create gpu device: %s\n", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+	SDL_ClaimWindowForGPUDevice(ctx->gpu_dev, ctx->window);
+
+	/* Initialize Shaders */
+	// TODO: EGL_LoadShader to make this less annoying
+	err = SDL_snprintf(path, PATH_MAX, "%striangle.spv.frag", SDL_GetBasePath());
 	if (err < 0) {
 		SDL_Log("Failure to write path to buffer.\n");
 		return SDL_APP_FAILURE;
 	}
 
-	size_t data_size = 0;
-	int offset = 0;
-	char *data = (char *) SDL_LoadFile(path, &(data_size));
+	size_t frag_shader_size = 0;
+	Uint8 *frag_shader_bin = (Uint8 *) SDL_LoadFile(path, &frag_shader_size);
+	if (!frag_shader_bin) {
+		SDL_Log("Failure to load shader at %s.\n", path);
+		return SDL_APP_FAILURE;
+	}
+
+	const SDL_GPUShaderCreateInfo frag_shader_info = {
+		.code_size = frag_shader_size,
+		.code = frag_shader_bin,
+		.entrypoint = "main",
+		.format = SDL_GPU_SHADERFORMAT_SPIRV,
+		.stage = SDL_GPU_SHADERSTAGE_FRAGMENT
+	};
+
+	SDL_GPUShader *frag_shader = SDL_CreateGPUShader(ctx->gpu_dev, &frag_shader_info);
+
+	err = SDL_snprintf(path, PATH_MAX, "%striangle.spv.vert", SDL_GetBasePath());
+	if (err < 0) {
+		SDL_Log("Failure to write path to buffer.\n");
+		return SDL_APP_FAILURE;
+	}
+
+	size_t vert_shader_size = 0;
+	Uint8 *vert_shader_bin = (Uint8 *) SDL_LoadFile(path, &vert_shader_size);
+	if (!vert_shader_bin) {
+		SDL_Log("Failure to load shader at %s.\n", path);
+		return SDL_APP_FAILURE;
+	}
+
+	const SDL_GPUShaderCreateInfo vert_shader_info = {
+		.code_size = vert_shader_size,
+		.code = vert_shader_bin,
+		.entrypoint = "main",
+		.format = SDL_GPU_SHADERFORMAT_SPIRV,
+		.stage = SDL_GPU_SHADERSTAGE_VERTEX
+	};
+
+	SDL_GPUShader *vert_shader = SDL_CreateGPUShader(ctx->gpu_dev, &vert_shader_info);
+
+	/* Initialize Graphics Pipeline */
+	const SDL_GPUGraphicsPipelineCreateInfo pipeline_info = {
+		.vertex_shader = vert_shader,
+		.fragment_shader = frag_shader,
+		.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+		.target_info = {
+			.num_color_targets = 1,
+			.color_target_descriptions = (SDL_GPUColorTargetDescription[]){{
+				.format = SDL_GetGPUSwapchainTextureFormat(ctx->gpu_dev, ctx->window),
+			}},
+		}
+	};
+
+	ctx->pipeline = SDL_CreateGPUGraphicsPipeline(ctx->gpu_dev, &pipeline_info);
+
+	SDL_ReleaseGPUShader(ctx->gpu_dev, frag_shader);
+	SDL_ReleaseGPUShader(ctx->gpu_dev, vert_shader);
+
+	/* Initialize Sphere */
+	err = SDL_snprintf(path, PATH_MAX, "%ssphere.bin", SDL_GetBasePath());
+	if (err < 0) {
+		SDL_Log("Failure to write path to buffer.\n");
+		return SDL_APP_FAILURE;
+	}
+
+	char *data = (char *) SDL_LoadFile(path, NULL);
 	if (!data) {
 		SDL_Log("Failure to load file at %s.\n", path);
 		return SDL_APP_FAILURE;
 	}
 
-	size_t indices_size = *(uint32_t *)(data + offset);
-	offset += 4;
-	ctx->world.indices = (uint32_t *)SDL_malloc(indices_size);
-	SDL_memcpy((void *)ctx->world.indices, (void *)(data + offset), indices_size);
-	offset += indices_size;
-
-	size_t vertices_size = *(uint32_t *)(data + offset);
-	offset += 4;
-	ctx->world.vertices = (float *)SDL_malloc(vertices_size);
-	SDL_memcpy((void *)ctx->world.vertices, (void *)(data + offset), vertices_size);
-	offset += vertices_size;
-
-	size_t normals_size = *(uint32_t *)(data + offset);
-	offset += 4;
-	ctx->world.normals = (float *)SDL_malloc(normals_size);
-	SDL_memcpy((void *)ctx->world.normals, (void *)(data + offset), normals_size);
-	offset += normals_size;
-
-	size_t uvs_size = *(uint32_t *)(data + offset);
-	offset += 4;
-	ctx->world.uvs = (float *)SDL_malloc(uvs_size);
-	SDL_memcpy((void *)ctx->world.uvs, (void *)(data + offset), uvs_size);
-
-	ctx->world.indices_size = indices_size;
-	ctx->world.vertices_size = vertices_size;
-	ctx->world.normals_size = normals_size;
-	ctx->world.uvs_size = uvs_size;
-
-	ctx->world.index_count = indices_size / 4;    // 4 bytes
-	ctx->world.vertex_count = vertices_size / 12; // 4 bytes per 3 coordinates
-	ctx->world.normal_count = normals_size / 12;  // 4 bytes per 3 coordinates
-	ctx->world.uv_count = uvs_size / 8;           // 4 bytes per 2 coordinates
+	World_Deserialize(&ctx->world, data);
 
 	SDL_free(data);
 
@@ -137,7 +173,38 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-	//AppState *ctx = (AppState *)appstate;
+	AppState *ctx = (AppState *)appstate;
+	SDL_Window *window = ctx->window;
+	SDL_GPUDevice *gpu_dev = ctx->gpu_dev;
+	SDL_GPUGraphicsPipeline *pipeline = ctx->pipeline;
+
+	bool ok;
+	
+	/* Game State */
+
+	/* Rendering */
+	SDL_GPUCommandBuffer *cmd_buf = SDL_AcquireGPUCommandBuffer(gpu_dev); SDL_assert(NULL != cmd_buf);
+
+	SDL_GPUTexture *swapchain_tex;
+	ok = SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf, window, &swapchain_tex, NULL, NULL); SDL_assert(ok);
+	SDL_GPUColorTargetInfo color_target = {
+		.texture = swapchain_tex,
+		.load_op = SDL_GPU_LOADOP_CLEAR,
+		.clear_color = { .r=0.0, .g=0.2, .b=0.4, .a=1.0 },
+		.store_op = SDL_GPU_STOREOP_STORE,
+	};
+
+	SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmd_buf, &color_target, 1, NULL);
+	// DRAW
+	SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
+	// - bind vertex data
+	// - bind uniform data
+	// - draw calls
+	SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+	SDL_EndGPURenderPass(render_pass);
+	// additional render passes
+	ok = SDL_SubmitGPUCommandBuffer(cmd_buf); SDL_assert(ok);
+
     return SDL_APP_CONTINUE;
 }
 

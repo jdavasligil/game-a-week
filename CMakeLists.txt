@@ -46,11 +46,19 @@ add_custom_command(
         ${CMAKE_CURRENT_SOURCE_DIR}/data/hey_comic.ttf
         ${CMAKE_CURRENT_SOURCE_DIR}/data/wheel.bmp
         $<TARGET_FILE_DIR:wheel>
-    )
+)
+
+add_custom_command(
+    TARGET florbles PRE_BUILD
+    COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shader/src/triangle.glsl.frag -w -fshader-stage=fragment -o ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.frag
+    COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shader/src/triangle.glsl.vert -w -fshader-stage=vertex -o ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.vert
+)
 
 add_custom_command(
     TARGET florbles POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_SOURCE_DIR}/data/sphere.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.vert
+        ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.frag
         $<TARGET_FILE_DIR:florbles>
-    )
+)
