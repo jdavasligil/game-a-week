@@ -4,6 +4,8 @@
 
 #include <SDL3/SDL_stdinc.h>
 #include <stdint.h>
+#include <cglm/mat4.h>
+#include <EGL/EGL_3d.h>
 
 
 typedef struct {
@@ -16,9 +18,12 @@ typedef struct {
 	uint32_t normal_count;
 	uint32_t uv_count;
 	uint32_t *indices;
-	float *vertices; // jump 3: [(x,y,z)(x,y,z)...]
-	float *normals;  // jump 3: [(x,y,z)(x,y,z)...]
-	float *uvs;      // jump 2: [(u,v)(u,v)(u,v)...]
+	float *vertices; // vec3: [(x,y,z)(x,y,z)...]
+	float *normals;  // vec3: [(x,y,z)(x,y,z)...]
+	float *uvs;      // vec2: [(u,v)(u,v)(u,v)...]
+
+	Transform transform;
+	Transform render_transform;
 } World;
 
 static inline void World_Deserialize(World *w, char *data) {

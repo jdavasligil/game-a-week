@@ -37,6 +37,8 @@ target_include_directories(florbles PUBLIC include)
 target_link_libraries(wheel PRIVATE libSDL3.so libSDL3_ttf.so libcglm.a)
 target_link_libraries(florbles PRIVATE libSDL3.so libSDL3_ttf.so libcglm.a)
 
+target_link_options(florbles PRIVATE -lm)
+
 # Copy necessary data into the target directories
 add_custom_command(
     TARGET wheel POST_BUILD
@@ -50,15 +52,15 @@ add_custom_command(
 
 add_custom_command(
     TARGET florbles PRE_BUILD
-    COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shader/src/triangle.glsl.frag -w -fshader-stage=fragment -o ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.frag
-    COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/shader/src/triangle.glsl.vert -w -fshader-stage=vertex -o ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.vert
+    COMMAND glslc -w -fshader-stage=fragment ${CMAKE_CURRENT_SOURCE_DIR}/shader/src/triangle_frag.glsl -o ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle_frag.spv
+    COMMAND glslc -w -fshader-stage=vertex ${CMAKE_CURRENT_SOURCE_DIR}/shader/src/triangle_vert.glsl -o ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle_vert.spv
 )
 
 add_custom_command(
     TARGET florbles POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_SOURCE_DIR}/data/sphere.bin
-        ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.vert
-        ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle.spv.frag
+        ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle_vert.spv
+        ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle_frag.spv
         $<TARGET_FILE_DIR:florbles>
 )

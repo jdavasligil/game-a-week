@@ -3,8 +3,7 @@
  * A planetary tower defense game.
  */
 
-#include <SDL3/SDL_error.h>
-#include <SDL3/SDL_stdinc.h>
+#include "EGL/EGL_3d.h"
 #define DEBUG true
 
 #define SDL_MAIN_USE_CALLBACKS 1
@@ -12,6 +11,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_stdinc.h>
+
+#include <cglm/cglm.h>
+
 
 #include "world.h"
 
@@ -21,8 +25,18 @@
 #define WINDOW_WIDTH  800
 #define WINDOW_HEIGHT 800
 
+//#define FOVY 1.2217304763960306f
+#define FOVY 70.0f
+#define OMEGA 0.0031415926535897933f // rad / ms
+#define DELTA_T 32 // milliseconds per simulation tick (16 ~ 60 FPS, 32 ~ 30 FPS)
+
 #define STRIDE 32
 
+
+
+typedef struct {
+	mat4 mvp;
+} UBO;
 
 typedef struct {
 	SDL_Window *window;
@@ -32,10 +46,15 @@ typedef struct {
 
 	World world;
 
+	UBO ubo;
+
+	mat4 projection;
+
 	Uint64 total_time;
 	Uint64 physics_time;
 	Uint64 prev_tick;
 } AppState;
+
 
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -48,6 +67,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 		return SDL_APP_FAILURE;
 	}
 	*appstate = ctx;
+
+	glm_perspective(FOVY, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.0001, 1000, ctx->projection);
 
 	/* Initialize App */
     SDL_SetAppMetadata("Florbles: Alien Invasion!", "0.0.0a", "com.florbles");
@@ -63,6 +84,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_Log("Couldn't create window: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
+	//SDL_SetRenderVSync(ctx->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
 
 	/* Initialize GPU Device */
 	ctx->gpu_dev = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, DEBUG, NULL);
@@ -75,7 +97,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 	/* Initialize Shaders */
 	// TODO: EGL_LoadShader to make this less annoying
-	err = SDL_snprintf(path, PATH_MAX, "%striangle.spv.frag", SDL_GetBasePath());
+	err = SDL_snprintf(path, PATH_MAX, "%striangle_frag.spv", SDL_GetBasePath());
 	if (err < 0) {
 		SDL_Log("Failure to write path to buffer.\n");
 		return SDL_APP_FAILURE;
@@ -98,7 +120,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 	SDL_GPUShader *frag_shader = SDL_CreateGPUShader(ctx->gpu_dev, &frag_shader_info);
 
-	err = SDL_snprintf(path, PATH_MAX, "%striangle.spv.vert", SDL_GetBasePath());
+	err = SDL_snprintf(path, PATH_MAX, "%striangle_vert.spv", SDL_GetBasePath());
 	if (err < 0) {
 		SDL_Log("Failure to write path to buffer.\n");
 		return SDL_APP_FAILURE;
@@ -116,7 +138,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 		.code = vert_shader_bin,
 		.entrypoint = "main",
 		.format = SDL_GPU_SHADERFORMAT_SPIRV,
-		.stage = SDL_GPU_SHADERSTAGE_VERTEX
+		.stage = SDL_GPU_SHADERSTAGE_VERTEX,
+		.num_uniform_buffers = 1,
 	};
 
 	SDL_GPUShader *vert_shader = SDL_CreateGPUShader(ctx->gpu_dev, &vert_shader_info);
@@ -154,56 +177,96 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 	World_Deserialize(&ctx->world, data);
 
+
+	Transform *world_transform = &ctx->world.transform;
+	EGL_TransformNew(world_transform);
+	world_transform->tz -= 5.0f;
+	EGL_TransformUpdate(world_transform);
+	EGL_TransformCopy(world_transform, &ctx->world.render_transform);
+
 	SDL_free(data);
-
-	SDL_SetRenderVSync(ctx->renderer, SDL_RENDERER_VSYNC_ADAPTIVE);
-
 	SDL_free(path);
+
+	ctx->prev_tick = SDL_GetTicks();
 
 	return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
+	AppState *ctx = (AppState *)appstate;
+
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;
-    }
+    } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+		int w = 0;
+		int h = 0;
+		SDL_GetWindowSizeInPixels(ctx->window, &w, &h);
+		glm_perspective(FOVY, (float)w / (float)h, 0.0001, 1000, ctx->projection);
+	}
+
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
 	AppState *ctx = (AppState *)appstate;
+	
+	World *world = &ctx->world;
+
 	SDL_Window *window = ctx->window;
 	SDL_GPUDevice *gpu_dev = ctx->gpu_dev;
 	SDL_GPUGraphicsPipeline *pipeline = ctx->pipeline;
 
 	bool ok;
+
+	/* Physics */
+	const Uint64 now = SDL_GetTicks();
+	const Uint64 dt = now - ctx->prev_tick;
+
+	// Physics
+	ctx->physics_time += dt;
+
+	while (ctx->physics_time >= DELTA_T) {
+		EGL_TransformCopy(&world->transform, &world->render_transform);
+		EGL_TransformRotate(&world->transform, OMEGA * DELTA_T, GLM_YUP);
+
+		ctx->physics_time -= DELTA_T;
+	}
+
 	
 	/* Game State */
 
 	/* Rendering */
+	glm_quat_slerp(world->render_transform.rotation, world->transform.rotation, (float)ctx->physics_time / (float)DELTA_T, world->render_transform.rotation);
+	EGL_TransformUpdate(&world->render_transform);
+	glm_mat4_mul(ctx->projection, world->render_transform.model, ctx->ubo.mvp);
 	SDL_GPUCommandBuffer *cmd_buf = SDL_AcquireGPUCommandBuffer(gpu_dev); SDL_assert(NULL != cmd_buf);
 
 	SDL_GPUTexture *swapchain_tex;
 	ok = SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf, window, &swapchain_tex, NULL, NULL); SDL_assert(ok);
-	SDL_GPUColorTargetInfo color_target = {
-		.texture = swapchain_tex,
-		.load_op = SDL_GPU_LOADOP_CLEAR,
-		.clear_color = { .r=0.0, .g=0.2, .b=0.4, .a=1.0 },
-		.store_op = SDL_GPU_STOREOP_STORE,
-	};
 
-	SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmd_buf, &color_target, 1, NULL);
-	// DRAW
-	SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
-	// - bind vertex data
-	// - bind uniform data
-	// - draw calls
-	SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
-	SDL_EndGPURenderPass(render_pass);
-	// additional render passes
+	/* Check for NULL swapchain texture which can occur if the window resizes */
+	if (swapchain_tex) {
+		SDL_GPUColorTargetInfo color_target = {
+			.texture = swapchain_tex,
+			.load_op = SDL_GPU_LOADOP_CLEAR,
+			.clear_color = { .r=0.0, .g=0.2, .b=0.4, .a=1.0 },
+			.store_op = SDL_GPU_STOREOP_STORE,
+		};
+
+		SDL_GPURenderPass *render_pass = SDL_BeginGPURenderPass(cmd_buf, &color_target, 1, NULL);
+		// DRAW
+		SDL_BindGPUGraphicsPipeline(render_pass, pipeline);
+		SDL_PushGPUVertexUniformData(cmd_buf, 0, &ctx->ubo, sizeof(ctx->ubo));
+		SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+		SDL_EndGPURenderPass(render_pass);
+		// additional render passes
+	}
+
 	ok = SDL_SubmitGPUCommandBuffer(cmd_buf); SDL_assert(ok);
+
+	ctx->prev_tick = now;
 
     return SDL_APP_CONTINUE;
 }
@@ -221,9 +284,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
 		//TTF_Quit();
 		SDL_free(ctx->world.indices);
-		//SDL_free(ctx->world.vertices);
-		//SDL_free(ctx->world.normals);
-		///SDL_free(ctx->world.uvs);
+		SDL_free(ctx->world.vertices);
+		SDL_free(ctx->world.normals);
+		SDL_free(ctx->world.uvs);
 		SDL_free(ctx);
 	}
 }
