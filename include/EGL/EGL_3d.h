@@ -11,15 +11,14 @@ typedef versor quat;
 
 
 typedef struct {
-	vec4 scale;
+	vec3 scale;
 	quat rotation;
 	union {
-		vec4 translation;
+		vec3 translation;
 		struct {
-			float tx;
-			float ty;
-			float tz;
-			float tw;
+			float x;
+			float y;
+			float z;
 		};
 	};
 	mat4 model;
@@ -28,9 +27,9 @@ typedef struct {
 
 
 static inline void EGL_TransformNew(Transform *t) {
-	glm_vec4_one(t->scale);
+	glm_vec3_one(t->scale);
 	glm_quat_identity(t->rotation);
-	glm_vec4_zero(t->translation);
+	glm_vec3_zero(t->translation);
 	glm_mat4_identity(t->model);
 }
 
@@ -38,7 +37,7 @@ static inline void EGL_TransformUpdate(Transform *t) {
 	glm_mat4_identity(t->model);
 	glm_scale(t->model, t->scale);
 	glm_quat_rotate(t->model, t->rotation, t->model);
-	glm_vec4_copy(t->translation, t->model[3]);
+	glm_vec3_copy(t->translation, t->model[3]);
 }
 
 static inline void EGL_TransformCopy(Transform *src, Transform *dest) {
@@ -48,7 +47,7 @@ static inline void EGL_TransformCopy(Transform *src, Transform *dest) {
 static inline void EGL_TransformRotate(Transform *t, float angle, vec3 axis) {
 	glm_rotate(t->model, angle, axis);
 	glm_mat4_quat(t->model, t->rotation);
-	glm_vec4_copy(t->translation, t->model[3]);
+	glm_vec3_copy(t->translation, t->model[3]);
 }
 
 static inline void EGL_TransformPrint(Transform *t) {
@@ -58,13 +57,16 @@ static inline void EGL_TransformPrint(Transform *t) {
 	line[0] = '\0';
 	log[0] = '\0';
 
+	SDL_snprintf(line, sizeof(char) * 64, "Transform:   %ld Bytes\n", sizeof(Transform));
+	SDL_strlcat(log, line, sizeof(char) * 1024);
+
 	SDL_snprintf(line, sizeof(char) * 64, "Rotation:    [%.2f, %.2f, %.2f, %.2f]\n", t->rotation[0], t->rotation[1], t->rotation[2], t->rotation[3]);
 	SDL_strlcat(log, line, sizeof(char) * 1024);
 
-	SDL_snprintf(line, sizeof(char) * 64, "Scale:       [%.2f, %.2f, %.2f, %.2f]\n", t->scale[0], t->scale[1], t->scale[2], t->scale[3]);
+	SDL_snprintf(line, sizeof(char) * 64, "Scale:       [%.2f, %.2f, %.2f]\n", t->scale[0], t->scale[1], t->scale[2]);
 	SDL_strlcat(log, line, sizeof(char) * 1024);
 
-	SDL_snprintf(line, sizeof(char) * 64, "Translation: [%.2f, %.2f, %.2f, %.2f]\n", t->translation[0], t->translation[1], t->translation[2], t->translation[3]);
+	SDL_snprintf(line, sizeof(char) * 64, "Translation: [%.2f, %.2f, %.2f]\n", t->translation[0], t->translation[1], t->translation[2]);
 	SDL_strlcat(log, line, sizeof(char) * 1024);
 
 	SDL_snprintf(line, sizeof(char) * 64, "Model: \n");

@@ -23,3 +23,18 @@ Did some research on gpu programming. The big challenge is pushing 3D operations
 
 ### Day 3
 Followed an [ODIN tutorial](https://www.youtube.com/watch?v=tfc3vschDVw) on getting a basic triangle rendered. Also followed some [SDL3 GPU examples](https://github.com/TheSpydog/SDL_gpu_examples) for reference. Not as bad as expected, but still pretty tricky. Burnt some midnight oil on this one, especially fiddling with shader compiling and cmake. Anyways, we are on track to rendering the world! Next time, we will get model / view / perspective transformations working and push the sphere and world texture to the gpu.
+
+### Day 4
+Got the triangle working! Otherwise, not much else.
+
+### Day 5
+Starting to understand glsl. Got cglm working with model / view / projection transformations. Created a 'Transform' model for handling homogenous coordinate affine transformations, and got quaternion interpolation working!
+
+### Day 6
+Tried to get the sphere rendering on the GPU, but got bogged down learning glsl and SDL3 GPU intrinsics. Got stuck for a couple hours because I forgot to submit the command buffer. Had a party to attend, so only got the buffer transfer setup.
+
+### Day 7
+Final Push!
+
+### Retrospective
+
