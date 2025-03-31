@@ -34,7 +34,9 @@ Starting to understand glsl. Got cglm working with model / view / projection tra
 Tried to get the sphere rendering on the GPU, but got bogged down learning glsl and SDL3 GPU intrinsics. Got stuck for a couple hours because I forgot to submit the command buffer. Had a party to attend, so only got the buffer transfer setup.
 
 ### Day 7
-Final Push!
+Final Push! We got textures working on the GPU with uv mapping. One step away from rendering the world of Florbles... and it's time to wrap it up!
 
 ### Retrospective
+This project was a real eye opener. GPU programming is no joke, and getting even a simple model on screen has been a real challenge. I knew going for 3D on the first week would be extremely difficult and unlikely to produce a playable game, but it was worthwhile nonetheless.
 
+I've learned an incredible amount of stuff in just one week: compiling shaders, pushing data from disk to cpu to gpu, rotational interpolation with quaternions, etc. Even though the game was not ultimately finished, this is a project I can look back to for reference in the future. Maybe I will come back and finish this up one day. Until then, on to the next one!

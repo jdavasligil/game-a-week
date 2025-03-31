@@ -60,6 +60,7 @@ add_custom_command(
     TARGET florbles POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_SOURCE_DIR}/data/sphere.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/data/bricks.bmp
         ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle_vert.spv
         ${CMAKE_CURRENT_SOURCE_DIR}/shader/bin/triangle_frag.spv
         $<TARGET_FILE_DIR:florbles>
