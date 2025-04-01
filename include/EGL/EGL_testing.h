@@ -1,3 +1,7 @@
+/**
+ * @file EGL_testing.h
+ * @brief A barebones testing framework with basic logging and error tracing.
+ */
 #ifndef EGL_TESTING_H
 #define EGL_TESTING_H
 
@@ -12,6 +16,7 @@
 
 #define VERBOSE_TEST // Uncomment for verbose tests.
 
+// Increase these values if necessary.
 #define LOG_BUFFER_MAX 4096
 #define ERRORS_MAX 64
 #define TESTS_MAX 256
@@ -45,9 +50,7 @@
 	snprintf(M->module, LABEL_MAX, "%s", #m);\
 	M->test_count = 0
 
-/**
- * Declare the current function as a test.
- */
+/** Declare the current function as a test. */
 #define EGL_DECLARE_TEST\
 	snprintf(T->testname, LABEL_MAX, __func__);\
 	T->error_count = 0
@@ -66,6 +69,13 @@
 	snprintf(T->errors[T->error_count].error, ERROR_MAX, format, ##__VA_ARGS__);\
 	T->error_count += 1
 
+/**
+ * Run a test with basic cpu clock timing.
+ *
+ * The timing is rough and not useful for microperformance benchmarks.
+ *
+ * @param t The test function name.
+ */
 #define EGL_RUN_TEST(t)\
 	if (M->test_count >= TESTS_MAX) {\
 		fprintf(stderr, "\033[31mFATAL\033[35m%d\033[0m    Test count has exceeded the max %d\n", __LINE__, TESTS_MAX);\
@@ -77,6 +87,11 @@
 	M->tests[M->test_count].time = (double)(M->end - M->begin) / CLOCKS_PER_SEC;\
 	M->test_count++
 
+/**
+ * Run and log an entire test module.
+ *
+ * @param t The module (function) name.
+ */
 #define EGL_RUN_MODULE(m)\
 	m(&M);\
 	EGL_LogModule(&M, &L)
@@ -220,10 +235,12 @@ static inline void EGL_LogModule(EGL_TestModule *M, EGL_TestLog *L) {
 }
 
 
+// Put headers and test module prototypes here. 
+// TODO Metaprogram to autofill these sections.
+
 /*$ HEADERS */
 #include <EGL/EGL_random.h>
 /*$ END HEADERS */
-
 
 /*$ TESTS */
 void EGL_Xoshiro128PlusTest(EGL_TestModule *M);

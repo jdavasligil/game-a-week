@@ -30,7 +30,7 @@
 #define WINDOW_HEIGHT 800
 
 #define FOVY 1.2217304763960306f // 70 deg in radians
-#define OMEGA 0.0031415926535897933f // rad / ms
+#define OMEGA 0.01//0.0031415926535897933f // rad / ms
 #define DELTA_T 16 // milliseconds per simulation tick (16 ~ 60 FPS, 32 ~ 30 FPS)
 
 #define STRIDE 32
@@ -123,7 +123,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 
 	Transform *world_transform = &ctx->world.transform;
-	EGL_TransformNew(world_transform);
+	EGL_TransformReset(world_transform);
 	world_transform->z -= 3.0f;
 	EGL_TransformUpdate(world_transform);
 	EGL_TransformCopy(world_transform, &ctx->world.render_transform);

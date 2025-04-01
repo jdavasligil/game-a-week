@@ -1,3 +1,8 @@
+/**
+ * @file EGL_random.h
+ * @brief Pseudo-random number generation routines.
+ */
+
 #ifndef EGL_RANDOM_H
 #define EGL_RANDOM_H
 

@@ -1,8 +1,14 @@
+/**
+ * @file EGL_strings.h
+ * @brief Byte and string manipulation routines.
+ */
+
 #ifndef EGL_STRINGS_H
 #define EGL_STRINGS_H
 
 #include <stddef.h>
 
+/** A simple byte reader to keep track of offset and size. */
 typedef struct {
 	char *data;
 	size_t offset;
@@ -22,11 +28,11 @@ typedef struct {
  * number >= `maxlen`, it means the output string was truncated. A negative
  * return value means an error occurred.
  *
- * \param r the reader containing the data to read the next line from.
- * \param dst the buffer to write the line into. Must not be NULL.
- * \param maxlen the maximum bytes to write, including the null-terminator.
+ * @param r the reader containing the data to read the next line from.
+ * @param dst the buffer to write the line into. Must not be NULL.
+ * @param maxlen the maximum bytes to write, including the null-terminator.
  *
- * \threadsafety It is safe to call this function from any thread.
+ * @threadsafety It is safe to call this function from any thread.
  */
 extern int EGL_ReadLine(Reader *r, char *dst, size_t maxlen);
 

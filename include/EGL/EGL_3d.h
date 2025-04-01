@@ -1,3 +1,8 @@
+/**
+ * @file EGL_3d.h
+ * @brief Suite of common 3D components and functions.
+ */
+
 #ifndef EGL_3D_H
 #define EGL_3D_H
 
@@ -10,6 +15,7 @@
 typedef versor quat;
 
 
+/** Stores the transformations applied to an object. */
 typedef struct {
 	vec3 scale;
 	quat rotation;
@@ -21,18 +27,24 @@ typedef struct {
 			float z;
 		};
 	};
-	mat4 model;
+	mat4 model; /**< The raw transformation matrix. */
 
 } Transform;
 
 
-static inline void EGL_TransformNew(Transform *t) {
+/**
+ * Reset the transform to the identity.
+ *
+ * MUST be called on any new transforms.
+ */
+static inline void EGL_TransformReset(Transform *t) {
 	glm_vec3_one(t->scale);
 	glm_quat_identity(t->rotation);
 	glm_vec3_zero(t->translation);
 	glm_mat4_identity(t->model);
 }
 
+/** Update the transform matrix model to reflect changes to properties. */
 static inline void EGL_TransformUpdate(Transform *t) {
 	glm_mat4_identity(t->model);
 	glm_scale(t->model, t->scale);
@@ -40,16 +52,25 @@ static inline void EGL_TransformUpdate(Transform *t) {
 	glm_vec3_copy(t->translation, t->model[3]);
 }
 
+/** Deep copy the memory from one transform to another. */
 static inline void EGL_TransformCopy(Transform *src, Transform *dest) {
 	SDL_memcpy((void *)dest, (void *)src, sizeof(Transform));
 }
 
+/**
+ * Rotate the transform by an angle in radians about an axis through its center.
+ *
+ * @param t Transform
+ * @param angle Angle (radians)
+ * @param axis The axis relative to the center of the transform.
+ */
 static inline void EGL_TransformRotate(Transform *t, float angle, vec3 axis) {
 	glm_rotate(t->model, angle, axis);
 	glm_mat4_quat(t->model, t->rotation);
 	glm_vec3_copy(t->translation, t->model[3]);
 }
 
+/** Print all data held by the transform for debugging. */
 static inline void EGL_TransformPrint(Transform *t) {
 	char *log = (char *)SDL_malloc(sizeof(char) * 1024);
 	char line[64];
